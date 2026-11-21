@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMS Gateway — Android app</title>
+    <meta
+      name="description"
+      content="Download the SMS Gateway Android app: the phone-side modem that sends SMS from your own SIMs."
+    />
+    <!--
+      External stylesheet and script, like the admin panel: helmet's production CSP
+      permits 'self' but not an inline <script>, so anything inline here would work
+      in development and silently die in production - the worst possible split.
+    -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="head">
+        <div class="logo" aria-hidden="true">📶</div>
+        <h1>SMS Gateway</h1>
+        <p class="sub">
+          The Android app that turns a phone into the modem for your gateway. Install it on the handset holding the
+          SIMs — not on the machine running the server.
+        </p>
+      </header>
+
+      <section class="card" aria-labelledby="dl-heading">
+        <h2 id="dl-heading" class="sr-only">Download</h2>
+
+        <!--
+          A real <a href> to the file, present in the HTML from the start. If the
+          metadata request fails, is slow, or the person has JavaScript off, the
+          button still downloads the app - the page degrades to exactly what the
+          bare .apk link used to do, which is the behaviour it is replacing.
+        -->
+        <div class="file">
+          <div class="file-icon" aria-hidden="true">📦</div>
+          <div class="file-meta">
+            <div class="file-name">sms-gateway.apk</div>
+            <div class="file-facts">
+              <span id="version" class="pill">version …</span>
+              <span id="size" class="fact">—</span>
+              <span id="updated" class="fact">—</span>
+            </div>
+          </div>
+        </div>
+
+        <a id="download-btn" class="btn" href="/admin/sms-gateway.apk" download="sms-gateway.apk">
+          Download the app
+        </a>
+
+        <p id="status" class="status muted small">Checking for the published build…</p>
+      </section>
+
+      <footer class="foot muted small">
+        Installing on a phone with your own SIM. Sending bulk messages from a personal SIM is what gets a number
+        blocked by its carrier — the gateway's per-SIM daily cap exists to prevent that, and is worth leaving alone.
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

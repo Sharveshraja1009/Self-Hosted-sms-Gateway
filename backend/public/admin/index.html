@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SMS Gateway — Admin</title>
+    <!--
+      Everything here is external (styles.css, app.js) rather than inline, on
+      purpose: in production the API sets Helmet's default Content-Security-Policy,
+      which allows same-origin files but blocks inline <script>/<style> and inline
+      onclick handlers. Building to that rule from the start means the panel works
+      identically in dev and prod, and there is no CSP exception to maintain.
+    -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ============================ Login ============================ -->
+    <section id="login-view" class="login-view">
+      <form id="login-form" class="login-card">
+        <h1>SMS Gateway</h1>
+        <p class="muted">Sign in to manage your gateway phones.</p>
+
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required />
+
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required />
+
+        <button type="submit" class="btn btn-primary" id="login-btn">Sign in</button>
+        <p id="login-error" class="error hidden"></p>
+      </form>
+    </section>
+
+    <!-- ============================ App ============================ -->
+    <section id="app-view" class="app-view hidden">
+      <header class="topbar">
+        <div class="brand">SMS Gateway</div>
+        <nav class="tabs">
+          <button class="tab" data-tab="phones">Phones</button>
+          <button class="tab" data-tab="messages">Messages</button>
+          <button class="tab" data-tab="send">Single send</button>
+          <button class="tab" data-tab="campaigns">Campaigns</button>
+          <button class="tab" data-tab="keys">API keys</button>
+          <button class="tab" data-tab="account">Account</button>
+        </nav>
+        <div class="topbar-right">
+          <span id="whoami" class="muted"></span>
+          <button id="logout-btn" class="btn btn-ghost">Sign out</button>
+        </div>
+      </header>
+
+      <main class="content">
+        <!-- ---------------- Phones ---------------- -->
+        <div id="tab-phones" class="tab-panel">
+          <div class="panel-head">
+            <h2>Gateway phones</h2>
+            <div class="filters">
+              <!--
+                The day the per-SIM figures are for. Defaults to today; picking a
+                past date answers "how many did this number send on Tuesday?",
+                which is the question you ask before planning tomorrow's campaign.
+              -->
+              <label for="phones-date" class="muted small">Day</label>
+              <input id="phones-date" type="date" />
+              <button id="phones-today" class="btn btn-ghost" type="button">Today</button>
+              <span id="phones-refresh" class="muted small">auto-refreshing…</span>
+            </div>
+          </div>
+          <div id="phones-totals" class="day-totals"></div>
+          <div id="phones-list" class="cards"></div>
+        </div>
+
+        <!-- ---------------- Messages ---------------- -->
+        <div id="tab-messages" class="tab-panel hidden">
+          <div class="panel-head">
+            <h2>Messages</h2>
+            <div class="filters">
+              <input id="msg-search" type="search" placeholder="Search number or text…" />
+              <select id="msg-status">
+                <option value="">All statuses</option>
+                <option value="QUEUED">Queued</option>
+                <option value="SENDING">Sending</option>
+                <option value="SENT">Sent</option>
+                <option value="DELIVERED">Delivered</option>
+                <option value="FAILED">Failed</option>
+              </select>
+              <button id="msg-refresh" class="btn btn-ghost">Refresh</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>When</th>
+                  <th>From</th>
+                  <th>To</th>
+                  <th>Message</th>
+                  <th>Parts</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="messages-body"></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <button id="msg-prev" class="btn btn-ghost">← Prev</button>
+            <span id="msg-page" class="muted"></span>
+            <button id="msg-next" class="btn btn-ghost">Next →</button>
+          </div>
+        </div>
+
+        <!-- ---------------- Send test ---------------- -->
+        <div id="tab-send" class="tab-panel hidden">
+          <div class="panel-head">
+            <h2>Single send</h2>
+            <span class="muted small">One message to one number — for testing, or a one-off.</span>
+          </div>
+          <form id="send-form" class="form-card">
+            <label for="send-from">From (SIM)</label>
+            <select id="send-from">
+              <option value="">Auto — least-busy SIM</option>
+            </select>
+
+            <div class="row2 row-cc">
+              <div>
+                <label for="send-country">Country code</label>
+                <input id="send-country" type="text" value="+91" />
+              </div>
+              <div>
+                <label for="send-to">To</label>
+                <input id="send-to" type="tel" placeholder="9876543210" autocomplete="off" required />
+              </div>
+            </div>
+            <span class="muted small">
+              Type the bare local number and the code on the left is added for you.
+              A number already written as <code>+91…</code> is kept exactly as-is.
+            </span>
+            <p id="send-to-preview" class="tpl-preview hidden"></p>
+
+            <label for="send-body">Message</label>
+            <textarea id="send-body" rows="4" placeholder="Test from the admin panel."></textarea>
+
+            <button type="submit" class="btn btn-primary" id="send-btn">Send</button>
+            <p id="send-result" class="result hidden"></p>
+          </form>
+        </div>
+
+        <!-- ---------------- Campaigns ---------------- -->
+        <div id="tab-campaigns" class="tab-panel hidden">
+          <div class="panel-head">
+            <h2>Campaigns</h2>
+            <span class="muted small">Send one message to many numbers — paced automatically to protect your SIMs.</span>
+          </div>
+
+          <form id="campaign-form" class="form-card form-wide">
+            <label for="c-name">Campaign name</label>
+            <input id="c-name" type="text" placeholder="Diwali offer — July" required />
+
+            <label for="c-from">Send from (SIM)</label>
+            <select id="c-from">
+              <option value="">Auto — balance across all SIMs</option>
+            </select>
+
+            <div class="row2">
+              <div>
+                <label for="c-country">Country code</label>
+                <input id="c-country" type="text" value="+91" />
+              </div>
+              <div>
+                <label for="c-interval">Seconds between messages</label>
+                <input id="c-interval" type="number" min="3" step="1" value="10" />
+              </div>
+            </div>
+
+            <div class="row2">
+              <div>
+                <label for="c-window-start">Send only from (hour)</label>
+                <input id="c-window-start" type="number" min="0" max="23" value="9" />
+              </div>
+              <div>
+                <label for="c-window-end">…until (hour)</label>
+                <input id="c-window-end" type="number" min="1" max="24" value="18" />
+              </div>
+            </div>
+            <span class="muted small">Business hours in <strong>server time</strong>: 9–18 sends 09:00–18:00 only; outside it the campaign waits. Use 0 and 24 to send all day.</span>
+
+            <label for="c-body">Message</label>
+            <textarea
+              id="c-body"
+              rows="4"
+              placeholder="Hi {name}, your rent of {amount} is due on {due_date}."
+            ></textarea>
+            <div class="tpl-row" id="c-vars">
+              <span class="muted small" id="c-vars-empty"
+                >Upload a spreadsheet below — every column becomes a variable you can drop in here.</span
+              >
+            </div>
+            <span class="muted small"
+              >Put <code>{any_column}</code> in the message and each person gets their own value. A blank
+              <code>{name}</code> becomes “there” (names are shortened to 8 characters); a row missing any
+              <em>other</em> value is failed and reported rather than sent half-filled.</span
+            >
+            <div id="c-preview" class="tpl-preview hidden"></div>
+
+            <label for="c-recipients">Recipients</label>
+            <label for="c-file" id="c-dropzone" class="dropzone">
+              <input id="c-file" type="file" accept=".xlsx,.csv,.txt" class="dropzone-input" />
+              <svg class="dropzone-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <path d="M12 15V4m0 0 -4 4m4-4 4 4" stroke-linecap="round" stroke-linejoin="round" />
+                <path d="M5 15v3a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span class="dropzone-title">Upload Excel or CSV</span>
+              <span class="dropzone-hint"
+                >A <strong>phone</strong> column, plus any columns you want to merge into the message — drag &amp; drop
+                or click</span
+              >
+            </label>
+            <p id="c-file-note" class="file-note hidden"></p>
+            <div id="c-uploaded" class="uploaded hidden"></div>
+            <textarea id="c-recipients" rows="6" placeholder="…or paste numbers here, one per line (these carry no variables, so use them only with a message that has none):&#10;9876543210&#10;9123456789&#10;+919000000000"></textarea>
+            <span class="muted small">After uploading, tick which column holds the phone numbers and name the variable each other column feeds. One file at a time — a new upload replaces the last. Bare 10-digit numbers get the country code above; +CC numbers are kept as-is; duplicates are removed.</span>
+
+            <button type="submit" class="btn btn-primary" id="c-btn">Create &amp; start sending</button>
+            <p id="c-result" class="result hidden"></p>
+          </form>
+
+          <h3 class="section-title">Your campaigns</h3>
+          <div id="campaigns-list" class="campaigns"></div>
+        </div>
+
+        <!-- ---------------- API keys ---------------- -->
+        <div id="tab-keys" class="tab-panel hidden">
+          <div class="panel-head"><h2>API keys</h2></div>
+
+          <form id="key-form" class="form-card">
+            <p class="muted small">
+              Create a key for your app (e.g. your website or backend). Give it only the scopes it needs.
+            </p>
+            <label for="key-name">Name</label>
+            <input id="key-name" type="text" placeholder="MyApp production" required />
+
+            <fieldset class="scopes">
+              <legend>Scopes</legend>
+              <label class="check"><input type="checkbox" value="sms:send" checked /> sms:send — send messages</label>
+              <label class="check"><input type="checkbox" value="sms:read" /> sms:read — read message history</label>
+              <label class="check"><input type="checkbox" value="gateway:connect" /> gateway:connect — for a phone</label>
+            </fieldset>
+
+            <button type="submit" class="btn btn-primary" id="key-btn">Create key</button>
+          </form>
+
+          <div id="key-created" class="key-created hidden">
+            <strong>Copy this key now — it is shown only once:</strong>
+            <code id="key-plaintext"></code>
+          </div>
+
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr><th>Name</th><th>Prefix</th><th>Scopes</th><th>Last used</th><th></th></tr>
+              </thead>
+              <tbody id="keys-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ---------------- Account ---------------- -->
+        <div id="tab-account" class="tab-panel hidden">
+          <div class="panel-head"><h2>Account</h2></div>
+
+          <form id="pwd-form" class="form-card">
+            <p class="muted small">
+              Change the password for the admin account you are signed in as.
+            </p>
+
+            <label for="pwd-email">Signed in as</label>
+            <!--
+              Read-only, not a text field: the endpoint changes the password of the
+              *authenticated* user and takes no email, so an editable box here would
+              imply a choice the API does not offer.
+            -->
+            <input id="pwd-email" type="email" autocomplete="username" readonly />
+
+            <label for="pwd-current">Current password</label>
+            <input id="pwd-current" type="password" autocomplete="current-password" required />
+
+            <label for="pwd-new">New password</label>
+            <input id="pwd-new" type="password" autocomplete="new-password" minlength="10" maxlength="72" required />
+
+            <label for="pwd-confirm">Confirm new password</label>
+            <input id="pwd-confirm" type="password" autocomplete="new-password" minlength="10" maxlength="72" required />
+
+            <label class="check"><input id="pwd-show" type="checkbox" /> Show passwords</label>
+
+            <span class="muted small">
+              10–72 characters. Length is the only rule — a passphrase beats a short
+              password with symbols. Changing it signs out <strong>every</strong> session,
+              including this one, so you will be asked to sign in again.
+            </span>
+
+            <button type="submit" class="btn btn-primary" id="pwd-btn">Change password</button>
+            <p id="pwd-result" class="result hidden"></p>
+          </form>
+        </div>
+      </main>
+
+      <!-- Per-phone call log / SMS viewer. Populated live from the phone. -->
+      <div id="modal" class="modal hidden">
+        <div class="modal-card">
+          <div class="modal-head">
+            <h3 id="modal-title"></h3>
+            <button id="modal-close" class="btn btn-ghost" aria-label="Close">✕</button>
+          </div>
+          <div id="modal-body" class="modal-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "_comment": "Edit this when you publish a new APK. Size and last-updated are read from the file itself, so they are never wrong here - only version, versionCode and notes live in this file. versionName/versionCode come from mobile/android/app/build.gradle.",
+  "version": "1.0",
+  "versionCode": 1,
+  "minAndroid": "8.0",
+  "notes": [
+    "Sends from a chosen SIM on dual-SIM phones, including Android 11",
+    "Survives being backgrounded: battery-optimisation exemption and auto-start",
+    "Keeps its settings when you install an update over the top",
+    "Server URL accepts a plain address - any /admin path is ignored"
+  ]
+}

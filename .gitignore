@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment - never commit real secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test output
+coverage/
+.nyc_output/
+
+# Cached mongod binaries downloaded by mongodb-memory-server for the tests
+.cache/mongodb-binaries/
+
+# React Native gateway app (mobile/)
+mobile/node_modules/
+mobile/android/.gradle/
+mobile/android/build/
+mobile/android/app/build/
+mobile/android/local.properties
+mobile/android/.idea/
+mobile/android/captures/
+mobile/.bundle/
+mobile/ios/Pods/
+
+# Signing secrets. Anyone holding BOTH of these can sign an APK that Android
+# accepts as an update to yours on any phone that already trusts it.
+mobile/android/keystore.properties
+*.keystore
+!debug.keystore
+
+*.apk
+*.aab
+
+# Dashboard
+dashboard/dist/
+dashboard/.vite/
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

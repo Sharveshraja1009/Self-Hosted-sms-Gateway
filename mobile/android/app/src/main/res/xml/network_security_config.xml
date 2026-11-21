@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext (plain HTTP / ws://) traffic policy.
+
+  WHY THIS FILE EXISTS: React Native's release build sets
+  `android:usesCleartextTraffic="false"`, which is a good default for a normal app
+  and completely wrong for this one. A self-hosted gateway's server is almost
+  always on the local network - `http://192.168.1.5:4000` - and without this the
+  release APK installs, launches, and then fails every connection with an error
+  that says nothing about TLS. That is hours of someone's evening.
+
+  A `networkSecurityConfig` takes precedence over `usesCleartextTraffic`, so this
+  file is what actually decides the policy.
+
+  WHY IT IS SET TO `true` RATHER THAN AN ALLOWLIST: Android's allowlist is by
+  DOMAIN. There is no way to express "any RFC1918 address", and we cannot know a
+  user's LAN IP at build time. Permitting cleartext broadly is the only thing that
+  makes a LAN deployment work at all.
+
+  WHAT THIS COSTS YOU: over plain HTTP, the API key in the WebSocket handshake and
+  the bodies of every SMS travel unencrypted. On a home or office LAN, that is
+  usually an acceptable risk and it is your call to make. Over the public internet
+  it is NOT: put the backend behind TLS and use an `https://` URL, at which point
+  the app negotiates `wss://` automatically (see websocketUrl() in src/config.ts)
+  and none of this applies.
+
+  The app shows a warning whenever the configured server URL is not https, so this
+  trade-off is visible to whoever is making it rather than buried in a manifest.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

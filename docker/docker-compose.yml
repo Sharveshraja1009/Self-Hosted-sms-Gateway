@@ -1,0 +1,102 @@
+# ---------------------------------------------------------------------------
+# Development infrastructure for the SMS Gateway.
+#
+# Brings up only the stateful dependencies the backend talks to, so you can
+# `npm run dev` against a real MongoDB and a real Redis from day one - never
+# against a mock that lies to you. The backend itself joins this file as a
+# container in Phase 8, once there is something to containerise.
+#
+#   docker compose -f docker/docker-compose.yml up -d
+#   docker compose -f docker/docker-compose.yml ps
+#   docker compose -f docker/docker-compose.yml down          # keeps data
+#   docker compose -f docker/docker-compose.yml down -v       # wipes data
+#
+# NOTE: this dev stack has NO AUTHENTICATION on either datastore. Both are bound
+# to localhost and hold nothing of value. Production is a different file, with
+# credentials and TLS - see docs/DEPLOYMENT.md.
+# ---------------------------------------------------------------------------
+
+name: sms-gateway
+
+services:
+  mongo:
+    image: mongo:8
+    container_name: smsgw-mongo
+    restart: unless-stopped
+    # A single-node REPLICA SET, not a standalone.
+    #
+    # This looks like over-engineering for a dev box and is not: multi-document
+    # transactions and change streams do not exist on a standalone mongod, and
+    # Phase 4 (queue) and Phase 5 (delivery reports) will want both. Discovering
+    # that on the day you need a transaction means changing how the database runs
+    # in the middle of a feature. It costs nothing to be a replica set from the
+    # start.
+    command: ['--replSet', 'rs0', '--bind_ip_all']
+    ports:
+      - '${MONGO_PORT:-27017}:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Idempotent self-initiation: rs.status() throws until the set exists, and
+      # the catch initiates it exactly once. Every later run takes the try branch
+      # and simply reports healthy.
+      #
+      # The member host MUST be `mongo:27017` (the compose service name), not
+      # localhost: it is the address the replica set advertises to clients, so a
+      # backend container in Phase 8 has to be able to resolve it. Connections
+      # from your host machine bypass that advertisement with
+      # `directConnection=true` in MONGODB_URI.
+      test: >
+        mongosh --quiet --eval "
+          try { rs.status().ok }
+          catch { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }
+        "
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: smsgw-redis
+    restart: unless-stopped
+    # appendonly: BullMQ job state lives here. Without an AOF, a container restart
+    # silently drops queued SMS - the exact failure this project exists to avoid.
+    # maxmemory-policy noeviction: a queue must never have its jobs evicted under
+    # memory pressure; better to fail loudly on write.
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory-policy noeviction
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Database browser, at http://localhost:8081.
+  mongo-express:
+    image: mongo-express:1-20-alpine3.19
+    container_name: smsgw-mongo-express
+    restart: unless-stopped
+    ports:
+      - '${MONGO_EXPRESS_PORT:-8081}:8081'
+    environment:
+      # From inside the compose network the replica set's advertised host
+      # resolves, so no directConnection is needed here.
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/?replicaSet=rs0
+      ME_CONFIG_BASICAUTH: 'false'
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+    name: smsgw-mongo-data
+  redis-data:
+    name: smsgw-redis-data

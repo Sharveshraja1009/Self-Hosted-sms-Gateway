@@ -1,0 +1,112 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!--
+      The permission this entire app exists for. Worth knowing: Google Play
+      restricts SEND_SMS - an app requesting it must be the user's default SMS
+      handler or hold a granted exemption. That is not a problem here, because
+      this APK is self-hosted and sideloaded rather than listed. It IS the reason
+      no "SMS gateway" app on the Play Store actually works this way.
+    -->
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <!-- Reads SIM state, so "no permission" and "no SIM" stay distinguishable. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <!--
+      Android 13+ split "read the SIM's own number" out of READ_PHONE_STATE.
+      We ask for it, but expect to be told nothing: most carriers never write the
+      number to the SIM, so the app also lets the operator type it in by hand.
+    -->
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+
+    <!--
+      Let the OWNER view this gateway phone's call log and received SMS from the
+      admin panel. These are "restricted" permissions on the Play Store, which is
+      moot for a self-hosted, sideloaded app (same as SEND_SMS above). They are
+      granted on the device by the operator, and only ever read on demand, over the
+      phone's own authenticated socket, for the account that owns the phone.
+    -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!-- Keeps the process alive while it is holding the gateway socket open. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!-- Android 13+: the permanent status notification is itself permission-gated. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Lets the CPU keep servicing the socket's heartbeat while the screen is off. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!--
+      Lets the app ASK to be exempted from battery optimisation ("allow background
+      activity"). This is the single most effective thing for keeping a gateway
+      alive: without the exemption, Doze and the OEM's battery manager will freeze
+      or kill the process when the screen is off, and START_STICKY only brings back
+      the native shell, not the WebSocket. The app requests it; the user grants it.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- A device with no telephony hardware cannot do the one thing this app does. -->
+    <uses-feature android:name="android.hardware.telephony" android:required="true" />
+
+    <!--
+      Android 11+ hides other apps from us by default (package visibility). To be
+      able to OPEN each OEM's "auto-start / protected apps" screen - the setting
+      that, on top of the standard battery-optimisation exemption, keeps a
+      background app alive on Xiaomi/Oppo/Vivo/Huawei/OnePlus - we must declare the
+      packages that own those screens here. Without this, startActivity() throws
+      ActivityNotFoundException even when the screen exists. Samsung/Pixel have no
+      such screen and are covered by the battery-optimisation exemption alone.
+    -->
+    <queries>
+      <package android:name="com.miui.securitycenter" />         <!-- Xiaomi / Redmi / POCO -->
+      <package android:name="com.coloros.safecenter" />          <!-- Oppo / Realme (ColorOS) -->
+      <package android:name="com.oppo.safe" />                   <!-- older Oppo -->
+      <package android:name="com.coloros.oppoguardelf" />        <!-- Oppo power manager -->
+      <package android:name="com.iqoo.secure" />                 <!-- Vivo / iQOO -->
+      <package android:name="com.vivo.permissionmanager" />      <!-- Vivo -->
+      <package android:name="com.huawei.systemmanager" />        <!-- Huawei / Honor (EMUI) -->
+      <package android:name="com.oneplus.security" />            <!-- OnePlus (OxygenOS) -->
+      <package android:name="com.samsung.android.lool" />        <!-- Samsung Device Care -->
+    </queries>
+
+    <application
+      android:name=".MainApplication"
+      android:label="@string/app_name"
+      android:icon="@mipmap/ic_launcher"
+      android:roundIcon="@mipmap/ic_launcher_round"
+      android:allowBackup="false"
+      android:theme="@style/AppTheme"
+      android:usesCleartextTraffic="${usesCleartextTraffic}"
+      android:networkSecurityConfig="@xml/network_security_config"
+      android:supportsRtl="true">
+      <activity
+        android:name=".MainActivity"
+        android:label="@string/app_name"
+        android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+        android:launchMode="singleTask"
+        android:windowSoftInputMode="adjustResize"
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent-filter>
+      </activity>
+
+      <!--
+        foregroundServiceType MUST agree with the type passed to startForeground()
+        in GatewayService.kt. On Android 14+ a mismatch is not a warning: the
+        system throws and the app dies on the spot.
+      -->
+      <service
+        android:name=".GatewayService"
+        android:enabled="true"
+        android:exported="false"
+        android:stopWithTask="false"
+        android:foregroundServiceType="dataSync" />
+    </application>
+</manifest>
